@@ -1790,36 +1790,44 @@ bool load_next_demo( void )
 	difficultyLevel = 2;
 	bonusLevelCurrent = false;
 
-	Uint8 temp = fgetc(demo_file);
+	Uint8 temp;
+	fread_u8_die(&temp, 1, demo_file);
 	JE_initEpisode(temp);
-	efread(levelName, 1, 10, demo_file); levelName[10] = '\0';
-	lvlFileNum = fgetc(demo_file);
 
-	player[0].items.weapon[FRONT_WEAPON].id  = fgetc(demo_file);
-	player[0].items.weapon[REAR_WEAPON].id   = fgetc(demo_file);
-	player[0].items.super_arcade_mode        = fgetc(demo_file);
-	player[0].items.sidekick[LEFT_SIDEKICK]  = fgetc(demo_file);
-	player[0].items.sidekick[RIGHT_SIDEKICK] = fgetc(demo_file);
-	player[0].items.generator                = fgetc(demo_file);
+	fread_die(levelName, 1, 10, demo_file);
+	levelName[10] = '\0';
 
-	player[0].items.sidekick_level           = fgetc(demo_file); // could probably ignore
-	player[0].items.sidekick_series          = fgetc(demo_file); // could probably ignore
+	fread_u8_die(&lvlFileNum, 1, demo_file);
 
-	initial_episode_num                      = fgetc(demo_file); // could probably ignore
+	fread_u8_die(&player[0].items.weapon[FRONT_WEAPON].id,  1, demo_file);
+	fread_u8_die(&player[0].items.weapon[REAR_WEAPON].id,   1, demo_file);
+	fread_u8_die(&player[0].items.super_arcade_mode,        1, demo_file);
+	fread_u8_die(&player[0].items.sidekick[LEFT_SIDEKICK],  1, demo_file);
+	fread_u8_die(&player[0].items.sidekick[RIGHT_SIDEKICK], 1, demo_file);
+	fread_u8_die(&player[0].items.generator,                1, demo_file);
 
-	player[0].items.shield                   = fgetc(demo_file);
-	player[0].items.special                  = fgetc(demo_file);
-	player[0].items.ship                     = fgetc(demo_file);
+	fread_u8_die(&player[0].items.sidekick_level,           1, demo_file); // could probably ignore
+	fread_u8_die(&player[0].items.sidekick_series,          1, demo_file); // could probably ignore
+
+	fread_u8_die(&initial_episode_num,                      1, demo_file); // could probably ignore
+
+	fread_u8_die(&player[0].items.shield,                   1, demo_file);
+	fread_u8_die(&player[0].items.special,                  1, demo_file);
+	fread_u8_die(&player[0].items.ship,                     1, demo_file);
 
 	for (uint i = 0; i < 2; ++i)
-		player[0].items.weapon[i].power = fgetc(demo_file);
+		fread_u8_die(&player[0].items.weapon[i].power,      1, demo_file);
 
-	fseek(demo_file, 3, SEEK_CUR);
+	Uint8 unused[3];
+	fread_u8_die(unused, 3, demo_file);
 
-	levelSong = fgetc(demo_file);
+	fread_u8_die(&levelSong, 1, demo_file);
 
-	demo_keys_wait = 0;
-	demo_keys = next_demo_keys = 0;
+	demo_keys = 0;
+
+	Uint8 temp2[2] = { 0, 0 };
+	fread_u8(temp2, 2, demo_file);
+	demo_keys_wait = (temp2[0] << 8) | temp2[1];
 
 	printf("loaded demo '%s'\n", demo_filename);
 
@@ -1828,12 +1836,23 @@ bool load_next_demo( void )
 
 bool replay_demo_keys( void )
 {
-	if (demo_keys_wait == 0)
-		if (read_demo_keys() == false)
-			return false; // no more keys
+	while (demo_keys_wait == 0)
+	{
+		demo_keys = 0;
+		fread_u8(&demo_keys, 1, demo_file);
 
-	if (demo_keys_wait > 0)
-		demo_keys_wait--;
+		Uint8 temp2[2] = { 0, 0 };
+		fread_u8(temp2, 2, demo_file);
+		demo_keys_wait = (temp2[0] << 8) | temp2[1];
+
+		if (feof(demo_file))
+		{
+			// no more keys
+			return false;
+		}
+	}
+
+	demo_keys_wait--;
 
 	if (demo_keys & (1 << 0))
 		player[0].y -= CURRENT_KEY_SPEED;
@@ -1851,18 +1870,6 @@ bool replay_demo_keys( void )
 	button[2] = (bool)(demo_keys & (1 << 7));
 
 	return true;
-}
-
-bool read_demo_keys( void )
-{
-	demo_keys = next_demo_keys;
-
-	efread(&demo_keys_wait, sizeof(Uint16), 1, demo_file);
-	demo_keys_wait = SDL_Swap16(demo_keys_wait);
-
-	next_demo_keys = getc(demo_file);
-
-	return !feof(demo_file);
 }
 
 /*Street Fighter codes*/
@@ -1981,13 +1988,13 @@ void JE_sort( void )
 
 void JE_playCredits( void )
 {
-	enum { lines_max = 132 };
+	enum { lines_max = 131 };
 	enum { line_max_length = 65 };
-	
+
 	char credstr[lines_max][line_max_length + 1];
-	
+
 	int lines = 0;
-	
+
 	JE_byte currentpic = 0, fade = 0;
 	JE_shortint fadechg = 1;
 	JE_byte currentship = 0;
@@ -1999,32 +2006,30 @@ void JE_playCredits( void )
 	setjasondelay2(1000);
 
 	play_song(8);
-	
+
 	// load credits text
 	FILE *f = dir_fopen_die(data_dir(), "tyrian.cdt", "rb");
-	for (lines = 0; !feof(f) && lines < lines_max; ++lines)
+	for (lines = 0; lines < lines_max; ++lines)
 	{
 		read_encrypted_pascal_string(credstr[lines], sizeof(credstr[lines]), f);
 	}
-	if (lines == lines_max)
-		--lines;
 	fclose(f);
-	
+
 	memcpy(colors, palettes[6-1], sizeof(colors));
 	JE_clr256(VGAScreen);
 	JE_showVGA();
 	fade_palette(colors, 2, 0, 255);
-	
+
 	//tempScreenSeg = VGAScreenSeg;
-	
+
 	const int ticks_max = lines * 20 * 3;
 	for (int ticks = 0; ticks < ticks_max; ++ticks)
 	{
 		setjasondelay(1);
 		JE_clr256(VGAScreen);
-		
+
 		blit_sprite_hv(VGAScreenSeg, 319 - sprite(EXTRA_SHAPES, currentpic)->width, 100 - (sprite(EXTRA_SHAPES, currentpic)->height / 2), EXTRA_SHAPES, currentpic, 0x0, fade - 15);
-		
+
 		fade += fadechg;
 		if (fade == 0 && fadechg == -1)
 		{
@@ -2088,18 +2093,18 @@ void JE_playCredits( void )
 			if (shipxca > 0 && shipxc > 0)
 				shipxwait = 1;
 		}
-		
+
 		uint ship_sprite = ships[currentship].shipgraphic;
 		if (shipxc < -10)
 			ship_sprite -= (shipxc < -20) ? 4 : 2;
 		else if (shipxc > 10)
 			ship_sprite += (shipxc > 20) ? 4 : 2;
-		
+
 		blit_sprite2x2(VGAScreen, shipx / 40, 184 - (ticks % 200), shapes9, ship_sprite);
-		
+
 		const int bottom_line = (ticks / 3) / 20;
 		int y = 20 - ((ticks / 3) % 20);
-		
+
 		for (int line = bottom_line - 10; line < bottom_line; ++line)
 		{
 			if (line >= 0 && line < lines_max)
@@ -2108,44 +2113,44 @@ void JE_playCredits( void )
 				{
 					const Uint8 color = credstr[line][0] - 65;
 					const char *text = &credstr[line][1];
-					
+
 					const int x = 110 - JE_textWidth(text, SMALL_FONT_SHAPES) / 2;
-					
+
 					JE_outTextAdjust(VGAScreen, x + abs((y / 18) % 4 - 2) - 1, y - 1, text, color, -8, SMALL_FONT_SHAPES, false);
 					JE_outTextAdjust(VGAScreen, x,                             y,     text, color, -2, SMALL_FONT_SHAPES, false);
 				}
 			}
-			
+
 			y += 20;
 		}
-		
+
 		fill_rectangle_xy(VGAScreen, 0,  0, 319, 10, 0);
 		fill_rectangle_xy(VGAScreen, 0, 190, 319, 199, 0);
-		
+
 		if (currentpic == sprite_table[EXTRA_SHAPES].count - 1)
 			JE_outTextAdjust(VGAScreen, 5, 180, miscText[54], 2, -2, SMALL_FONT_SHAPES, false);  // levels-in-episode
-		
+
 		if (bottom_line == lines_max - 8)
 			fade_song();
-		
+
 		if (ticks == ticks_max - 1)
 		{
 			--ticks;
 			play_song(9);
 		}
-		
+
 		NETWORK_KEEP_ALIVE();
-		
+
 		JE_showVGA();
-		
+
 		wait_delay();
-		
+
 		if (JE_anyButton())
 			break;
 	}
-	
+
 	fade_black(10);
-	
+
 	free_sprites(EXTRA_SHAPES);
 }
 
@@ -2414,7 +2419,6 @@ void JE_operation( JE_byte slot )
 					if (newkey || newmouse)
 						break;
 				}
-
 			}
 			while (!newkey && !newmouse);
 
@@ -2489,7 +2493,6 @@ void JE_operation( JE_byte slot )
 						JE_playSampleNum(S_SELECT);
 						break;
 				}
-
 			}
 		}
 	}
@@ -3195,14 +3198,14 @@ redo:
 
 						if (new_input)
 						{
-							demo_keys_wait = SDL_Swap16(demo_keys_wait);
-							efwrite(&demo_keys_wait, sizeof(Uint16), 1, demo_file);
+							Uint8 temp2[2] = { demo_keys_wait >> 8, demo_keys_wait };
+							fwrite_u8(temp2, 2, demo_file);
 
 							demo_keys = 0;
 							for (unsigned int i = 0; i < 8; i++)
 								demo_keys |= keysactive[keySettings[i]] ? (1 << i) : 0;
 
-							fputc(demo_keys, demo_file);
+							fwrite_u8(&demo_keys, 1, demo_file);
 
 							demo_keys_wait = 0;
 						}

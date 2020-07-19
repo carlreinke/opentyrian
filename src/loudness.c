@@ -24,6 +24,8 @@
 #include "opentyr.h"
 #include "params.h"
 
+#include <stdlib.h>
+
 float music_volume = 0, sample_volume = 0;
 
 bool music_stopped = true;
@@ -196,11 +198,12 @@ void load_music( void )
 	{
 		music_file = dir_fopen_die(data_dir(), "music.mus", "rb");
 		
-		efread(&song_count, sizeof(song_count), 1, music_file);
+		fread_u16_die(&song_count, 1, music_file);
 		
 		song_offset = malloc((song_count + 1) * sizeof(*song_offset));
 		
-		efread(song_offset, 4, song_count, music_file);
+		fread_u32_die(song_offset, song_count, music_file);
+
 		song_offset[song_count] = ftell_eof(music_file);
 	}
 }

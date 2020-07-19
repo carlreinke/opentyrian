@@ -1050,7 +1050,7 @@ static void JE_aliasDirt( SDL_Surface * screen )
 	Uint8 *s = screen->pixels;
 	s += 12 * screen->pitch;
 
-	for (y = 12; y < (unsigned)screen->h; y++) {
+	for (y = 12; y < (unsigned int)screen->h; y++) {
 		for (x = 0; x < screen->pitch; x++) {
 			if (*s == PIXEL_BLACK) {
 				*s = aliasDirtPixel(screen, x, y, s);

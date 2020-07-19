@@ -232,7 +232,7 @@ void JE_starlib_main( void )
 			case '}':
 				pColor += 72;
 				break;
-			case '`': /* ` */
+			case '`':
 				doChange = !doChange;
 				break;
 			case 'P':

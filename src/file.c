@@ -1,4 +1,4 @@
-/* 
+/*
  * OpenTyrian: A modern cross-platform port of Tyrian
  * Copyright (C) 2007-2009  The OpenTyrian Development Team
  *
@@ -25,6 +25,7 @@
 
 #include <errno.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 const char *custom_data_dir = NULL;
@@ -39,30 +40,30 @@ const char *data_dir( void )
 		"data",
 		".",
 	};
-	
+
 	static const char *dir = NULL;
-	
+
 	if (dir != NULL)
 		return dir;
-	
+
 	for (uint i = 0; i < COUNTOF(dirs); ++i)
 	{
 		if (dirs[i] == NULL)
 			continue;
-		
+
 		FILE *f = dir_fopen(dirs[i], "tyrian1.lvl", "rb");
 		if (f)
 		{
 			fclose(f);
-			
+
 			dir = dirs[i];
 			break;
 		}
 	}
-	
+
 	if (dir == NULL) // data not found
 		dir = "";
-	
+
 	return dir;
 }
 
@@ -71,11 +72,11 @@ FILE *dir_fopen( const char *dir, const char *file, const char *mode )
 {
 	char *path = malloc(strlen(dir) + 1 + strlen(file) + 1);
 	sprintf(path, "%s/%s", dir, file);
-	
+
 	FILE *f = fopen(path, mode);
-	
+
 	free(path);
-	
+
 	return f;
 }
 
@@ -83,10 +84,10 @@ FILE *dir_fopen( const char *dir, const char *file, const char *mode )
 FILE *dir_fopen_warn(  const char *dir, const char *file, const char *mode )
 {
 	FILE *f = dir_fopen(dir, file, mode);
-	
+
 	if (f == NULL)
 		fprintf(stderr, "warning: failed to open '%s': %s\n", file, strerror(errno));
-	
+
 	return f;
 }
 
@@ -94,7 +95,7 @@ FILE *dir_fopen_warn(  const char *dir, const char *file, const char *mode )
 FILE *dir_fopen_die( const char *dir, const char *file, const char *mode )
 {
 	FILE *f = dir_fopen(dir, file, mode);
-	
+
 	if (f == NULL)
 	{
 		fprintf(stderr, "error: failed to open '%s': %s\n", file, strerror(errno));
@@ -102,7 +103,7 @@ FILE *dir_fopen_die( const char *dir, const char *file, const char *mode )
 		                "       Please read the README file.\n");
 		JE_tyrianHalt(1);
 	}
-	
+
 	return f;
 }
 
@@ -119,90 +120,33 @@ bool dir_file_exists( const char *dir, const char *file )
 long ftell_eof( FILE *f )
 {
 	long pos = ftell(f);
-	
+
 	fseek(f, 0, SEEK_END);
 	long size = ftell(f);
-	
+
 	fseek(f, pos, SEEK_SET);
-	
+
 	return size;
 }
 
-// endian-swapping fread that dies if the expected amount cannot be read
-size_t efread( void *buffer, size_t size, size_t num, FILE *stream )
+void fread_die(void *buffer, size_t size, size_t count, FILE *stream)
 {
-	size_t num_read = fread(buffer, size, num, stream);
-	
-#if SDL_BYTEORDER == SDL_BIG_ENDIAN
-	switch (size)
-	{
-		case 2:
-			for (size_t i = 0; i < num; i++)
-				((Uint16 *)buffer)[i] = SDL_Swap16(((Uint16 *)buffer)[i]);
-			break;
-		case 4:
-			for (size_t i = 0; i < num; i++)
-				((Uint32 *)buffer)[i] = SDL_Swap32(((Uint32 *)buffer)[i]);
-			break;
-		case 8:
-			for (size_t i = 0; i < num; i++)
-				((Uint64 *)buffer)[i] = SDL_Swap64(((Uint64 *)buffer)[i]);
-			break;
-		default:
-			break;
-	}
-#endif
-	
-	if (num_read != num)
+	size_t result = fread(buffer, size, count, stream);
+	if (result != count)
 	{
 		fprintf(stderr, "error: An unexpected problem occurred while reading from a file.\n");
-		JE_tyrianHalt(1);
+		SDL_Quit();
+		exit(EXIT_FAILURE);
 	}
-
-	return num_read;
 }
 
-// endian-swapping fwrite that dies if the expected amount cannot be written
-size_t efwrite( const void *buffer, size_t size, size_t num, FILE *stream )
+void fwrite_die(const void *buffer, size_t size, size_t count, FILE *stream)
 {
-	void *swap_buffer = NULL;
-	
-#if SDL_BYTEORDER == SDL_BIG_ENDIAN
-	switch (size)
-	{
-		case 2:
-			swap_buffer = malloc(size * num);
-			for (size_t i = 0; i < num; i++)
-				((Uint16 *)swap_buffer)[i] = SDL_SwapLE16(((Uint16 *)buffer)[i]);
-			buffer = swap_buffer;
-			break;
-		case 4:
-			swap_buffer = malloc(size * num);
-			for (size_t i = 0; i < num; i++)
-				((Uint32 *)swap_buffer)[i] = SDL_SwapLE32(((Uint32 *)buffer)[i]);
-			buffer = swap_buffer;
-			break;
-		case 8:
-			swap_buffer = malloc(size * num);
-			for (size_t i = 0; i < num; i++)
-				((Uint64 *)swap_buffer)[i] = SDL_SwapLE64(((Uint64 *)buffer)[i]);
-			buffer = swap_buffer;
-			break;
-		default:
-			break;
-	}
-#endif
-	
-	size_t num_written = fwrite(buffer, size, num, stream);
-	
-	if (swap_buffer != NULL)
-		free(swap_buffer);
-	
-	if (num_written != num)
+	size_t result = fwrite(buffer, size, count, stream);
+	if (result != count)
 	{
 		fprintf(stderr, "error: An unexpected problem occurred while writing to a file.\n");
-		JE_tyrianHalt(1);
+		SDL_Quit();
+		exit(EXIT_FAILURE);
 	}
-	
-	return num_written;
 }

@@ -23,6 +23,7 @@
 
 #include "SDL.h"
 
+#include <stdbool.h>
 
 #define SDL_POLL_INTERVAL 5
 
